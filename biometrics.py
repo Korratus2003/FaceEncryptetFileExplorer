@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import hashlib
 import os
-import sqlite3
+from pysqlcipher3 import dbapi2 as sqlite
 import json
 from cryptography.fernet import Fernet
 import base64
@@ -21,8 +21,9 @@ landmark_detector.loadModel("lbfmodel.yaml")
 
 # --- Baza danych ---
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite.connect(DB_PATH)
     cursor = conn.cursor()
+    cursor.execute(f"PRAGMA key = 'moje_tajne_haslo_123';")  # tutaj klucz do zaszyfrowania pliku
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS biometrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +33,7 @@ def init_db():
     ''')
     conn.commit()
     return conn
+
 
 def save_multiple_reference_data_sqlite(scans):
     conn = init_db()
@@ -49,8 +51,9 @@ def has_biometric_data():
     if not os.path.exists(DB_PATH):
         return False
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite.connect(DB_PATH)
         cursor = conn.cursor()
+        cursor.execute("PRAGMA key = 'moje_tajne_haslo_123';")
         cursor.execute("SELECT COUNT(*) FROM biometrics")
         count = cursor.fetchone()[0]
         conn.close()
