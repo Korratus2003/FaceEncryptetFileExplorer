@@ -4,4 +4,5 @@ numpy==2.2.6
 opencv-contrib-python==4.11.0.86
 opencv-python==4.11.0.86
 pycparser==2.22
+pysqlcipher3==1.2.0
 tkinterdnd2==0.4.3
