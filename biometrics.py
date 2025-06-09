@@ -6,6 +6,7 @@ import sqlite3
 import json
 from cryptography.fernet import Fernet
 import base64
+import time
 
 DB_PATH = "secure_face.db"
 STATIC_KEY = hashlib.sha256(b"moje_tajne_haslo_123").digest()
@@ -97,9 +98,6 @@ def generate_biometric_key(ratios, precision=4):
     return hashlib.sha256(ratios_str.encode('utf-8')).hexdigest()
 
 # --- Funkcje główne ---
-import time
-import cv2
-import numpy as np
 
 def scan_face_multiple_times(count=4):
     face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
@@ -124,7 +122,6 @@ def scan_face_multiple_times(count=4):
                 cv2.circle(frame, (int(lx), int(ly)), 2, (0, 0, 255), -1)
 
         if landmarks_list:
-            # Odliczanie w czasie rzeczywistym (3 sekundy)
             start_time = time.time()
             countdown_duration = 3.0
             while True:
@@ -153,10 +150,8 @@ def scan_face_multiple_times(count=4):
                 if elapsed >= countdown_duration:
                     break
 
-            # Po odliczaniu zbieramy dane z ostatniej klatki
             ratios = get_landmark_ratios(landmarks_list[0])
             scans.append(ratios)
-            print(f"Skan {len(scans)} wykonany: {ratios}")
         else:
             cv2.putText(frame, "Nie wykryto twarzy", (50, 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
@@ -172,38 +167,59 @@ def scan_face_multiple_times(count=4):
     cv2.destroyAllWindows()
     return scans
 
+def register_new_user():
+    scans = scan_face_multiple_times()
+    if scans:
+        save_multiple_reference_data_sqlite(scans)
+        return True, "Dane użytkownika zostały zapisane."
+    else:
+        return False, "Nie udało się zapisać danych."
 
-def recognize_face(tolerance=0.08):
+def recognize_face(tolerance=0.08, timeout=5.0):
     face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     landmark_detector = cv2.face.createFacemarkLBF()
     landmark_detector.loadModel("lbfmodel.yaml")
 
     reference_scans, reference_key = load_reference_data_sqlite()
     if reference_scans is None:
-        print("❌ Brak danych biometrycznych. Zeskanuj twarz najpierw.")
-        return False, None
+        return False, None, "Brak danych biometrycznych. Zeskanuj twarz najpierw."
 
     cam = cv2.VideoCapture(0)
+    if not cam.isOpened():
+        return False, None, "Nie można uzyskać dostępu do kamery."
+
     recognized = False
+    start_time = time.time()
+
     while True:
+        if time.time() - start_time > timeout:
+            cam.release()
+            cv2.destroyAllWindows()
+            return False, None, f"Limit czasu ({timeout} s) rozpoznawania twarzy przekroczony."
+
         ret, frame = cam.read()
         if not ret:
+            time.sleep(0.1)
             continue
+
         faces, landmarks_list = detect_landmarks(frame, face_detector, landmark_detector)
         if landmarks_list:
             current_ratios = get_landmark_ratios(landmarks_list[0])
             distances = [np.linalg.norm(current_ratios - r) for r in reference_scans]
             min_dist = min(distances)
-            print(f"Odchylenie: {min_dist:.5f}")
             if min_dist < tolerance:
-                print("✅ Twarz rozpoznana")
-                recognized = True
-                break
+                cam.release()
+                cv2.destroyAllWindows()
+                return True, reference_key, "Twarz rozpoznana."
             else:
-                print("❌ Brak zgodności biometrycznej")
+                # Można dać info, ale lepiej nie spamować
+                pass
+
         cv2.imshow("Rozpoznawanie twarzy", frame)
         if cv2.waitKey(1) == ord('q'):
             break
+        time.sleep(0.01)  # krótkie odciążenie CPU
+
     cam.release()
     cv2.destroyAllWindows()
-    return recognized, reference_key
+    return False, None, "Proces rozpoznawania przerwany przez użytkownika."
