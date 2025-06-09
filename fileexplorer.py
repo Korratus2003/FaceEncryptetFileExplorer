@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from encryption import encrypt_file, decrypt_file
-from biometrics import recognize_face, scan_face_multiple_times, save_multiple_reference_data_sqlite
+from biometrics import recognize_face, scan_face_multiple_times, save_multiple_reference_data_sqlite, has_biometric_data
 import threading
 
 class FileExplorer(TkinterDnD.Tk):
@@ -10,9 +10,6 @@ class FileExplorer(TkinterDnD.Tk):
         self.biometric_key_hex = None
         self.title("Bezpieczny Eksplorator Plików (Tkinter DnD)")
         self.geometry("600x400")
-
-        self.add_user_button = tk.Button(self, text="Dodaj użytkownika", command=self.add_user)
-        self.add_user_button.pack(pady=5)
 
         self.scan_button = tk.Button(self, text="Zeskanuj twarz", command=self.scan_face_or_lock)
         self.scan_button.pack(pady=5)
@@ -30,7 +27,6 @@ class FileExplorer(TkinterDnD.Tk):
 
     def add_user(self):
         self._append_listbox("🔵 Dodawanie użytkownika - rozpoczęto skanowanie...")
-        self.add_user_button.config(state=tk.DISABLED)
         threading.Thread(target=self.add_user_thread, daemon=True).start()
 
     def add_user_thread(self):
@@ -41,22 +37,23 @@ class FileExplorer(TkinterDnD.Tk):
         else:
             message = "❌ Nie udało się dodać użytkownika (skan nieudany)."
         self._append_listbox(message)
-        self.after(0, lambda: self.add_user_button.config(state=tk.NORMAL))
 
     def scan_face_or_lock(self):
-        # Zablokuj oba przyciski
         self.scan_button.config(state=tk.DISABLED)
-        self.add_user_button.config(state=tk.DISABLED)
+
+        # Sprawdź, czy w bazie są dane biometryczne
+        if not has_biometric_data():
+            self._append_listbox("❗️ Brak danych biometrycznych. Rozpoczynam dodawanie użytkownika...")
+            self.add_user()
+            self.scan_button.config(state=tk.NORMAL)
+            return
 
         if self.files_enabled:
             self.biometric_key_hex = None
             self.files_enabled = False
             self._append_listbox("🔒 Aplikacja zablokowana. Nie można szyfrować/deszyfrować.")
             self.scan_button.config(text="Zeskanuj twarz")
-
-            # Odblokuj przyciski po 2 sekundach
             self.after(2000, lambda: self.scan_button.config(state=tk.NORMAL))
-            self.after(2000, lambda: self.add_user_button.config(state=tk.NORMAL))
         else:
             self._append_listbox("🔵 Rozpoczynanie rozpoznawania twarzy...")
             threading.Thread(target=self.recognize_face_thread, daemon=True).start()
@@ -69,9 +66,8 @@ class FileExplorer(TkinterDnD.Tk):
             self.files_enabled = True
             self.after(0, lambda: self.scan_button.config(text="Zablokuj"))
 
-        # Odblokuj przyciski po zakończeniu rozpoznawania
+        # Odblokuj przycisk skanowania
         self.after(0, lambda: self.scan_button.config(state=tk.NORMAL))
-        self.after(0, lambda: self.add_user_button.config(state=tk.NORMAL))
 
     def drop(self, event):
         if not self.files_enabled:

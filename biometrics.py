@@ -45,6 +45,21 @@ def save_multiple_reference_data_sqlite(scans):
     conn.commit()
     conn.close()
 
+def has_biometric_data():
+    if not os.path.exists(DB_PATH):
+        return False
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM biometrics")
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count > 0
+    except Exception as e:
+        print(f"Błąd podczas sprawdzania danych biometrycznych: {e}")
+        return False
+
+
 def load_reference_data_sqlite():
     if not os.path.exists(DB_PATH):
         return None, None
