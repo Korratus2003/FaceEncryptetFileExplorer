@@ -8,10 +8,16 @@ from cryptography.fernet import Fernet
 import base64
 import time
 
+# --- Klucze i baza ---
 DB_PATH = "secure_face.db"
 STATIC_KEY = hashlib.sha256(b"moje_tajne_haslo_123").digest()
 FERNET_KEY = base64.urlsafe_b64encode(STATIC_KEY[:32])
 fernet = Fernet(FERNET_KEY)
+
+# --- Inicjalizacja jednorazowa modeli ---
+face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+landmark_detector = cv2.face.createFacemarkLBF()
+landmark_detector.loadModel("lbfmodel.yaml")
 
 # --- Baza danych ---
 def init_db():
@@ -53,8 +59,8 @@ def load_reference_data_sqlite():
         return ratios, key
     return None, None
 
-# --- Detekcja twarzy i landmarków ---
-def detect_landmarks(image, face_detector, landmark_detector):
+# --- Detekcja twarzy i cech ---
+def detect_landmarks(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     faces = face_detector.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
     landmarks_list = []
@@ -97,13 +103,8 @@ def generate_biometric_key(ratios, precision=4):
     ratios_str = "|".join(f"{x:.{precision}f}" for x in rounded)
     return hashlib.sha256(ratios_str.encode('utf-8')).hexdigest()
 
-# --- Funkcje główne ---
-
+# --- Skanowanie twarzy ---
 def scan_face_multiple_times(count=4):
-    face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    landmark_detector = cv2.face.createFacemarkLBF()
-    landmark_detector.loadModel("lbfmodel.yaml")
-
     cam = cv2.VideoCapture(0)
     scans = []
 
@@ -112,9 +113,8 @@ def scan_face_multiple_times(count=4):
         if not ret:
             continue
 
-        faces, landmarks_list = detect_landmarks(frame, face_detector, landmark_detector)
+        faces, landmarks_list = detect_landmarks(frame)
 
-        # Rysuj zielony prostokąt i czerwone punkty
         for (x, y, w, h) in faces:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
         for landmarks in landmarks_list:
@@ -129,7 +129,7 @@ def scan_face_multiple_times(count=4):
                 if not ret2:
                     continue
 
-                faces2, landmarks_list2 = detect_landmarks(frame2, face_detector, landmark_detector)
+                faces2, landmarks_list2 = detect_landmarks(frame2)
                 for (x, y, w, h) in faces2:
                     cv2.rectangle(frame2, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 for landmarks2 in landmarks_list2:
@@ -167,19 +167,8 @@ def scan_face_multiple_times(count=4):
     cv2.destroyAllWindows()
     return scans
 
-def register_new_user():
-    scans = scan_face_multiple_times()
-    if scans:
-        save_multiple_reference_data_sqlite(scans)
-        return True, "Dane użytkownika zostały zapisane."
-    else:
-        return False, "Nie udało się zapisać danych."
-
+# --- Rozpoznawanie twarzy ---
 def recognize_face(tolerance=0.08, timeout=5.0):
-    face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    landmark_detector = cv2.face.createFacemarkLBF()
-    landmark_detector.loadModel("lbfmodel.yaml")
-
     reference_scans, reference_key = load_reference_data_sqlite()
     if reference_scans is None:
         return False, None, "Brak danych biometrycznych. Zeskanuj twarz najpierw."
@@ -188,7 +177,6 @@ def recognize_face(tolerance=0.08, timeout=5.0):
     if not cam.isOpened():
         return False, None, "Nie można uzyskać dostępu do kamery."
 
-    recognized = False
     start_time = time.time()
 
     while True:
@@ -202,7 +190,7 @@ def recognize_face(tolerance=0.08, timeout=5.0):
             time.sleep(0.1)
             continue
 
-        faces, landmarks_list = detect_landmarks(frame, face_detector, landmark_detector)
+        faces, landmarks_list = detect_landmarks(frame)
         if landmarks_list:
             current_ratios = get_landmark_ratios(landmarks_list[0])
             distances = [np.linalg.norm(current_ratios - r) for r in reference_scans]
@@ -211,15 +199,21 @@ def recognize_face(tolerance=0.08, timeout=5.0):
                 cam.release()
                 cv2.destroyAllWindows()
                 return True, reference_key, "Twarz rozpoznana."
-            else:
-                # Można dać info, ale lepiej nie spamować
-                pass
 
         cv2.imshow("Rozpoznawanie twarzy", frame)
         if cv2.waitKey(1) == ord('q'):
             break
-        time.sleep(0.01)  # krótkie odciążenie CPU
+        time.sleep(0.01)
 
     cam.release()
     cv2.destroyAllWindows()
     return False, None, "Proces rozpoznawania przerwany przez użytkownika."
+
+# --- Rejestracja użytkownika ---
+def register_new_user():
+    scans = scan_face_multiple_times()
+    if scans:
+        save_multiple_reference_data_sqlite(scans)
+        return True, "Dane użytkownika zostały zapisane."
+    else:
+        return False, "Nie udało się zapisać danych."
