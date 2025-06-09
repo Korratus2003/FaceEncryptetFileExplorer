@@ -2,28 +2,42 @@ import cv2
 import numpy as np
 import hashlib
 import os
+import urllib.request
 from pysqlcipher3 import dbapi2 as sqlite
 import json
 from cryptography.fernet import Fernet
 import base64
 import time
 
-# --- Klucze i baza ---
+# --- Ścieżki i klucze ---
 DB_PATH = "secure_face.db"
 STATIC_KEY = hashlib.sha256(b"moje_tajne_haslo_123").digest()
 FERNET_KEY = base64.urlsafe_b64encode(STATIC_KEY[:32])
 fernet = Fernet(FERNET_KEY)
 
+LBF_MODEL_PATH = "lbfmodel.yaml"
+LBF_MODEL_URL = "https://github.com/kurnianggoro/GSOC2017/raw/master/data/lbfmodel.yaml"
+
+# --- Pobieranie modelu LBF jeśli nie istnieje ---
+if not os.path.exists(LBF_MODEL_PATH):
+    print(f"Pobieranie modelu LBF z {LBF_MODEL_URL}...")
+    try:
+        urllib.request.urlretrieve(LBF_MODEL_URL, LBF_MODEL_PATH)
+        print("Model LBF pobrany pomyślnie.")
+    except Exception as e:
+        print(f"Błąd podczas pobierania modelu LBF: {e}")
+        exit(1)
+
 # --- Inicjalizacja jednorazowa modeli ---
 face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 landmark_detector = cv2.face.createFacemarkLBF()
-landmark_detector.loadModel("lbfmodel.yaml")
+landmark_detector.loadModel(LBF_MODEL_PATH)
 
 # --- Baza danych ---
 def init_db():
     conn = sqlite.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute(f"PRAGMA key = 'moje_tajne_haslo_123';")  # tutaj klucz do zaszyfrowania pliku
+    cursor.execute(f"PRAGMA key = 'moje_tajne_haslo_123';")  # klucz do zaszyfrowania pliku
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS biometrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +47,6 @@ def init_db():
     ''')
     conn.commit()
     return conn
-
 
 def save_multiple_reference_data_sqlite(scans):
     conn = init_db()
@@ -61,7 +74,6 @@ def has_biometric_data():
     except Exception as e:
         print(f"Błąd podczas sprawdzania danych biometrycznych: {e}")
         return False
-
 
 def load_reference_data_sqlite():
     if not os.path.exists(DB_PATH):
