@@ -80,14 +80,23 @@ class FileExplorer(TkinterDnD.Tk):
     def process_files(self, files):
         for file_path in files:
             try:
-                try:
-                    out_path = decrypt_file(file_path, self.biometric_key_hex)
-                    self._append_listbox(f"Odszyfrowano: {file_path} -> {out_path}")
-                except Exception:
-                    out_path = encrypt_file(file_path, self.biometric_key_hex)
-                    self._append_listbox(f"Zaszyfrowano: {file_path} -> {out_path}")
+                if file_path.lower().endswith('.enc'):
+                    # Plik zaszyfrowany - próbujemy odszyfrować
+                    try:
+                        out_path = decrypt_file(file_path, self.biometric_key_hex)
+                        self._append_listbox(f"Odszyfrowano: {file_path} -> {out_path}")
+                    except Exception as e:
+                        self._append_listbox(f"❌ Nie udało się odszyfrować pliku {file_path}: {str(e)}")
+                else:
+                    # Plik niezaszyfrowany - szyfrujemy
+                    try:
+                        out_path = encrypt_file(file_path, self.biometric_key_hex)
+                        self._append_listbox(f"Zaszyfrowano: {file_path} -> {out_path}")
+                    except Exception as e:
+                        self._append_listbox(f"❌ Błąd szyfrowania pliku {file_path}: {str(e)}")
+
             except Exception as e:
-                self._append_listbox(f"Błąd pliku {file_path}: {str(e)}")
+                self._append_listbox(f"❌ Nieoczekiwany błąd pliku {file_path}: {str(e)}")
 
     def _append_listbox(self, text: str):
         self.after(0, lambda: self.listbox.insert(tk.END, text))
