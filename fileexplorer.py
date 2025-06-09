@@ -27,6 +27,7 @@ class FileExplorer(TkinterDnD.Tk):
 
     def add_user(self):
         self._append_listbox("🔵 Dodawanie użytkownika - rozpoczęto skanowanie...")
+        self.scan_button.config(state=tk.DISABLED)  # blokuj przycisk na czas dodawania
         threading.Thread(target=self.add_user_thread, daemon=True).start()
 
     def add_user_thread(self):
@@ -37,6 +38,7 @@ class FileExplorer(TkinterDnD.Tk):
         else:
             message = "❌ Nie udało się dodać użytkownika (skan nieudany)."
         self._append_listbox(message)
+        self.after(0, lambda: self.scan_button.config(state=tk.NORMAL))  # odblokuj przycisk po zakończeniu
 
     def scan_face_or_lock(self):
         self.scan_button.config(state=tk.DISABLED)
@@ -45,7 +47,6 @@ class FileExplorer(TkinterDnD.Tk):
         if not has_biometric_data():
             self._append_listbox("❗️ Brak danych biometrycznych. Rozpoczynam dodawanie użytkownika...")
             self.add_user()
-            self.scan_button.config(state=tk.NORMAL)
             return
 
         if self.files_enabled:
