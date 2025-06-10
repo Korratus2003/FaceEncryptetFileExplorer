@@ -30,3 +30,39 @@ Kod jest podzielony na moduły odpowiedzialne za skanowanie twarzy, rozpoznawani
 - Rozbudowa interfejsu o obsługę innych formatów plików i możliwość masowego szyfrowania.  
 - Wprowadzenie mechanizmów audytu i monitoringu próby dostępu, a także powiadomień o nieudanych próbach rozpoznania twarzy.  
 - Zastosowanie innych metod biometrycznych (np. odcisk palca, skan tęczówki) jako alternatywnych metod uwierzytelniania.
+
+
+## 6. Instalacja
+
+Zaleca sie utworzenie środowiska wirtualnego:
+```bash
+python -m venv venv
+```
+
+### Linux/macOS
+```bash
+source venv/bin/activate
+```
+
+### Windows
+
+```bash
+venv\Scripts\activate
+```
+
+Zainstaluj wymagane biblioteki:
+
+```bash
+pip install -r requirements.txt
+```
+
+Jeśli pysqlcipher3 nie instaluje sie poprawnie — wymagane moga być narzedzia
+kompilacyjne (np. build-essential, libsqlcipher-dev na Linuxie). i poradnik
+jak zainstalować w razie problemu https://github.com/silverback97/pysqlcipher3-
+for-windo
+
+## Uruchomienie
+
+```bash
+python fileexplorer.py
+```
